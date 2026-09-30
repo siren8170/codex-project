@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f6f7f2">
+    <title>오늘 하루</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="site-header">
+        <div class="brand" aria-label="오늘 하루">
+          <svg class="brand-logo" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+            <rect width="48" height="48" rx="14" fill="#c6edb4"/>
+            <circle cx="24" cy="18" r="9" fill="#fff9df"/>
+            <path d="M7 31c5 0 5-9 10-9s5 12 11 12 6-9 13-9" fill="none" stroke="#1b5a43" stroke-width="3.5" stroke-linecap="round"/>
+            <circle cx="38" cy="13" r="2" fill="#4b9567"/>
+          </svg>
+          <span>오늘 하루</span>
+        </div>
+        <button class="nav-button" id="view-toggle" type="button" aria-controls="calendar-view" aria-expanded="false">캘린더 보기 <span aria-hidden="true">↗</span></button>
+      </header>
+
+      <main>
+        <section id="home-view" class="view" aria-labelledby="home-title">
+          <div class="intro-label"><span class="label-dot" aria-hidden="true"></span><span id="today-label"></span></div>
+          <h1 id="home-title">말로 남기는<br><em>오늘의 기록.</em></h1>
+          <p class="intro-copy">바쁜 하루도 잠깐의 목소리로 남겨 보세요.<br>녹음은 이 브라우저에 오늘 하루 동안 보관됩니다.</p>
+
+          <section class="recorder-card" aria-labelledby="recorder-title">
+            <div class="card-heading">
+              <div>
+                <p class="eyebrow">나의 하루 기록</p>
+                <h2 id="recorder-title">지금 떠오르는 이야기를 해주세요</h2>
+              </div>
+              <span class="card-icon" aria-hidden="true">♪</span>
+            </div>
+            <div class="recording-display" aria-hidden="true">
+              <span class="sound-bar"></span><span class="sound-bar"></span><span class="sound-bar"></span><span class="sound-bar"></span><span class="sound-bar"></span><span class="sound-bar"></span><span class="sound-bar"></span><span class="sound-bar"></span><span class="sound-bar"></span><span class="sound-bar"></span><span class="sound-bar"></span><span class="sound-bar"></span><span class="sound-bar"></span><span class="sound-bar"></span><span class="sound-bar"></span><span class="sound-bar"></span><span class="sound-bar"></span><span class="sound-bar"></span><span class="sound-bar"></span><span class="sound-bar"></span><span class="sound-bar"></span><span class="sound-bar"></span><span class="sound-bar"></span><span class="sound-bar"></span><span class="sound-bar"></span>
+            </div>
+            <div class="recording-meta"><span id="recording-state">녹음할 준비가 되었어요</span><strong id="recording-time">00:00</strong></div>
+            <div class="recording-actions">
+              <button class="button button-primary" id="record-button" type="button"><span class="button-symbol" aria-hidden="true">●</span> 녹음 시작</button>
+              <button class="button button-stop" id="stop-button" type="button" disabled><span class="stop-symbol" aria-hidden="true"></span> 녹음 중지</button>
+            </div>
+            <p class="helper-text" id="recording-message" role="status" aria-live="polite">처음 녹음할 때 마이크 사용 권한을 허용해 주세요.</p>
+          </section>
+
+          <section class="saved-section" aria-labelledby="saved-title">
+            <div class="section-heading"><div><p class="eyebrow">오늘의 보관함</p><h2 id="saved-title">저장된 녹음 <span id="recording-count">0</span></h2></div><span class="small-note">날짜가 바뀌면 자동 삭제</span></div>
+            <div id="recording-list" class="recording-list"><p class="empty-message">아직 저장된 녹음이 없어요.</p></div>
+          </section>
+        </section>
+
+        <section id="calendar-view" class="view" aria-labelledby="calendar-title" hidden>
+          <div class="calendar-intro"><p class="eyebrow">하루씩 돌아보기</p><h1 id="calendar-title">하루의 조각을<br><em>다시 꺼내 봐요.</em></h1><p>날짜를 누르면 그날의 일기를 볼 수 있어요.</p></div>
+          <div class="calendar-layout">
+            <section class="calendar-card" aria-label="캘린더">
+              <div class="month-heading"><div><p class="eyebrow">나의 기록</p><h2 id="month-label"></h2></div><div class="month-controls"><button id="previous-month" type="button" aria-label="이전 달">‹</button><button id="next-month" type="button" aria-label="다음 달">›</button></div></div>
+              <div class="weekdays" aria-hidden="true"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
+              <div id="calendar-days" class="calendar-days"></div>
+              <p class="calendar-key">모든 날짜에는 가상 예시 일기가 표시됩니다.</p>
+            </section>
+            <article class="diary-card" aria-label="그날의 일기">
+              <p class="eyebrow">그날의 일기</p>
+              <p id="diary-date" class="diary-date"></p>
+              <div id="diary-content"></div>
+            </article>
+          </div>
+        </section>
+      </main>
+      <footer>오늘 하루의 기록은 이 브라우저에서만 볼 수 있어요.</footer>
+    </div>
+  </body>
+</html>
