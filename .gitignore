@@ -1,1 +1,13 @@
-﻿Work_Log.md
+Work_Log.md
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.idea/
+*.iml
+build/
+android/.gradle/
+android/local.properties
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+# 개인 정보가 담긴 발표 자료(로컬 전용)
+docs/*.html
