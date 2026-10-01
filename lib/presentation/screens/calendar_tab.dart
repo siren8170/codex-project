@@ -2,14 +2,23 @@ import 'package:flutter/material.dart';
 
 import '../../core/date_format.dart';
 import '../../core/theme/app_theme.dart';
-import '../../core/time/time_service.dart';
-import '../../data/mock_diary_generator.dart';
-import '../../domain/diary_policy.dart';
+import '../../domain/services/logical_date_service.dart';
+import '../../data/diary_store.dart';
+import '../../domain/policies/diary_policy.dart';
 
 class CalendarTab extends StatefulWidget {
-  const CalendarTab({super.key, required this.logicalToday});
+  const CalendarTab({
+    super.key,
+    required this.logicalToday,
+    required this.diaries,
+    required this.onSaveDiary,
+  });
 
   final DateTime logicalToday;
+
+  /// [diaryKey]로 찾는 저장된 일기.
+  final Map<String, Diary> diaries;
+  final Future<bool> Function(Diary diary) onSaveDiary;
 
   @override
   State<CalendarTab> createState() => _CalendarTabState();
@@ -21,15 +30,16 @@ class _CalendarTabState extends State<CalendarTab> {
     widget.logicalToday.month,
   );
   late DateTime _selectedDate = widget.logicalToday;
-  final Map<String, MockDiary> _editedDiaries = {};
-  final _generator = const MockDiaryGenerator();
   final _policy = const DiaryPolicy();
 
   @override
   void didUpdateWidget(covariant CalendarTab oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!LogicalDate.sameDay(oldWidget.logicalToday, widget.logicalToday) &&
-        LogicalDate.sameDay(_selectedDate, oldWidget.logicalToday)) {
+    if (!LogicalDateService.isSameDate(
+          oldWidget.logicalToday,
+          widget.logicalToday,
+        ) &&
+        LogicalDateService.isSameDate(_selectedDate, oldWidget.logicalToday)) {
       _selectedDate = widget.logicalToday;
       _visibleMonth = DateTime(
         widget.logicalToday.year,
@@ -38,12 +48,7 @@ class _CalendarTabState extends State<CalendarTab> {
     }
   }
 
-  String _key(DateTime date) => '${date.year}-${date.month}-${date.day}';
-
-  bool _hasDiary(DateTime date) =>
-      LogicalDate.sameDay(date, widget.logicalToday) ||
-      date.day % 4 == 1 ||
-      _editedDiaries.containsKey(_key(date));
+  bool _hasDiary(DateTime date) => widget.diaries.containsKey(diaryKey(date));
 
   void _changeMonth(int direction) => setState(() {
     _visibleMonth = DateTime(
@@ -53,59 +58,19 @@ class _CalendarTabState extends State<CalendarTab> {
     _selectedDate = _visibleMonth;
   });
 
-  Future<void> _editDiary(MockDiary diary) async {
-    final titleController = TextEditingController(text: diary.title);
-    final bodyController = TextEditingController(text: diary.body);
-    final saved = await showDialog<bool>(
+  Future<void> _editDiary(Diary diary) async {
+    final edited = await showDialog<Diary>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('오늘의 일기 수정'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: titleController,
-                decoration: const InputDecoration(labelText: '제목'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: bodyController,
-                minLines: 5,
-                maxLines: 8,
-                decoration: const InputDecoration(
-                  labelText: '본문',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('취소'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('저장'),
-          ),
-        ],
-      ),
+      builder: (context) => _DiaryEditDialog(diary: diary),
     );
-    if (saved == true &&
+    if (edited != null &&
         mounted &&
-        _policy.canEdit(diary.date, widget.logicalToday)) {
-      setState(
-        () => _editedDiaries[_key(diary.date)] = MockDiary(
-          date: diary.date,
-          title: titleController.text.trim(),
-          body: bodyController.text.trim(),
-        ),
-      );
+        _policy.canEdit(
+          diaryLogicalDate: diary.date,
+          currentLogicalDate: widget.logicalToday,
+        )) {
+      await widget.onSaveDiary(edited);
     }
-    titleController.dispose();
-    bodyController.dispose();
   }
 
   @override
@@ -117,12 +82,13 @@ class _CalendarTabState extends State<CalendarTab> {
       _visibleMonth.month + 1,
       0,
     ).day;
-    final diary = _hasDiary(_selectedDate)
-        ? (_editedDiaries[_key(_selectedDate)] ??
-              _generator.forDate(_selectedDate))
-        : null;
+    final diary = widget.diaries[diaryKey(_selectedDate)];
     final canEdit =
-        diary != null && _policy.canEdit(_selectedDate, widget.logicalToday);
+        diary != null &&
+        _policy.canEdit(
+          diaryLogicalDate: _selectedDate,
+          currentLogicalDate: widget.logicalToday,
+        );
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
       children: [
@@ -204,8 +170,14 @@ class _CalendarTabState extends State<CalendarTab> {
                     _visibleMonth.month,
                     day,
                   );
-                  final selected = LogicalDate.sameDay(date, _selectedDate);
-                  final today = LogicalDate.sameDay(date, widget.logicalToday);
+                  final selected = LogicalDateService.isSameDate(
+                    date,
+                    _selectedDate,
+                  );
+                  final today = LogicalDateService.isSameDate(
+                    date,
+                    widget.logicalToday,
+                  );
                   return Semantics(
                     label:
                         '${date.month}월 $day일${_hasDiary(date) ? ', 일기 있음' : ''}',
@@ -255,7 +227,7 @@ class _CalendarTabState extends State<CalendarTab> {
                   Icon(Icons.circle, color: AppColors.green, size: 7),
                   SizedBox(width: 6),
                   Text(
-                    '점 표시는 예시 일기가 있는 날이에요.',
+                    '점 표시는 일기가 있는 날이에요.',
                     style: TextStyle(color: AppColors.muted, fontSize: 11),
                   ),
                 ],
@@ -311,7 +283,7 @@ class _CalendarTabState extends State<CalendarTab> {
               ],
               const SizedBox(height: 8),
               const Text(
-                '예시 일기 · 변경 내용은 앱을 닫으면 사라져요.',
+                '일기는 이 기기에만 저장돼요.',
                 style: TextStyle(color: AppColors.muted, fontSize: 11),
               ),
             ],
@@ -320,4 +292,69 @@ class _CalendarTabState extends State<CalendarTab> {
       ],
     );
   }
+}
+
+/// 입력 컨트롤러를 다이얼로그 수명에 묶어, 닫힘 애니메이션 중 해제되지 않게 한다.
+class _DiaryEditDialog extends StatefulWidget {
+  const _DiaryEditDialog({required this.diary});
+
+  final Diary diary;
+
+  @override
+  State<_DiaryEditDialog> createState() => _DiaryEditDialogState();
+}
+
+class _DiaryEditDialogState extends State<_DiaryEditDialog> {
+  late final _titleController = TextEditingController(text: widget.diary.title);
+  late final _bodyController = TextEditingController(text: widget.diary.body);
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _bodyController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('오늘의 일기 수정'),
+    content: SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _titleController,
+            decoration: const InputDecoration(labelText: '제목'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _bodyController,
+            minLines: 5,
+            maxLines: 8,
+            decoration: const InputDecoration(
+              labelText: '본문',
+              border: OutlineInputBorder(),
+            ),
+          ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('취소'),
+      ),
+      FilledButton(
+        onPressed: () => Navigator.pop(
+          context,
+          Diary(
+            date: widget.diary.date,
+            title: _titleController.text.trim(),
+            body: _bodyController.text.trim(),
+          ),
+        ),
+        child: const Text('저장'),
+      ),
+    ],
+  );
 }

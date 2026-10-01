@@ -11,3 +11,10 @@ ios/Flutter/Generated.xcconfig
 ios/Flutter/flutter_export_environment.sh
 # 개인 정보가 담긴 발표 자료(로컬 전용)
 docs/*.html
+# 초기 웹 프로토타입(로컬 참고용)
+/index.html
+/style.css
+/app.js
+docs/images/
+# Claude Code 로컬 설정(미리보기 서버 등)
+.claude/

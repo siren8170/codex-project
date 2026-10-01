@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/date_format.dart';
 import '../../core/theme/app_theme.dart';
-import '../../core/time/time_service.dart';
+import '../../domain/services/logical_date_service.dart';
 
 class SettingsSheet extends StatefulWidget {
   const SettingsSheet({
@@ -57,7 +57,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
                 borderRadius: BorderRadius.circular(14),
               ),
             ),
-            items: LogicalDate.allowedTurnoverHours
+            items: LogicalDateService.allowedTurnoverHours
                 .map(
                   (hour) => DropdownMenuItem(
                     value: hour,

@@ -1,18 +1,36 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/date_format.dart';
+import '../../core/services/audio_player_service.dart';
+import '../../core/services/audio_recorder_service.dart';
 import '../../core/theme/app_theme.dart';
+import '../../data/recording_store.dart';
+import '../../domain/services/logical_date_service.dart';
 
 class RecordTab extends StatefulWidget {
   const RecordTab({
     super.key,
     required this.logicalToday,
     required this.retentionDays,
+    required this.turnoverHour,
+    required this.recorder,
+    required this.player,
+    required this.exporter,
+    required this.recordingStore,
     required this.onCreateDiary,
   });
 
   final DateTime logicalToday;
   final int retentionDays;
+
+  /// 녹음을 논리적 날짜별로 묶을 때 쓰는 하루 전환 시각.
+  final int turnoverHour;
+  final AudioRecorderService recorder;
+  final AudioPlayerService player;
+  final AudioExportService exporter;
+  final RecordingStore recordingStore;
   final VoidCallback onCreateDiary;
 
   @override
@@ -20,12 +38,210 @@ class RecordTab extends StatefulWidget {
 }
 
 class _RecordTabState extends State<RecordTab> {
-  bool _recordingPreview = false;
+  bool _recording = false;
+  bool _busy = false;
+  int _elapsedSeconds = 0;
+  Timer? _ticker;
+  List<Recording> _recordings = const [];
+  String? _playingPath;
+  PlaybackStatus? _playback;
+  Timer? _playbackTicker;
 
-  void _showMockNotice(String message) =>
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
+  @override
+  void initState() {
+    super.initState();
+    _loadRecordings();
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    if (_playbackTicker != null) {
+      _playbackTicker!.cancel();
+      widget.player.stop().catchError((Object _) {});
+    }
+    super.dispose();
+  }
+
+  Future<void> _loadRecordings() async {
+    try {
+      final recordings = await widget.recordingStore.list();
+      if (mounted) setState(() => _recordings = recordings);
+    } catch (error) {
+      debugPrint('녹음 목록을 읽지 못했습니다: $error');
+    }
+  }
+
+  /// 새 안내는 이전 안내를 바로 대신한다.
+  void _showNotice(String message) => ScaffoldMessenger.of(context)
+    ..removeCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
+    );
+
+  /// 같은 녹음을 다시 누르면 멈추고, 다른 녹음을 누르면 바꿔서 처음부터 재생한다.
+  Future<void> _togglePlayback(Recording recording) async {
+    final wasPlaying = _playingPath == recording.path;
+    await _stopPlayback();
+    if (wasPlaying) return;
+    try {
+      await widget.player.play(recording.path);
+    } catch (error) {
+      _showNotice('녹음을 재생하지 못했어요.');
+      debugPrint('재생 실패: $error');
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _playingPath = recording.path;
+      _playback = null;
+    });
+    _playbackTicker = Timer.periodic(
+      const Duration(milliseconds: 200),
+      (_) => _pollPlayback(),
+    );
+  }
+
+  Future<void> _pollPlayback() async {
+    final path = _playingPath;
+    if (path == null) return;
+    try {
+      final status = await widget.player.status();
+      if (!mounted || _playingPath != path) return;
+      if (!status.playing) {
+        _finishPlayback();
+      } else {
+        setState(() => _playback = status);
+      }
+    } catch (error) {
+      debugPrint('재생 상태 확인 실패: $error');
+      _finishPlayback();
+    }
+  }
+
+  void _finishPlayback() {
+    _playbackTicker?.cancel();
+    _playbackTicker = null;
+    if (mounted) {
+      setState(() {
+        _playingPath = null;
+        _playback = null;
+      });
+    }
+  }
+
+  Future<void> _stopPlayback() async {
+    if (_playingPath == null) return;
+    _finishPlayback();
+    try {
+      await widget.player.stop();
+    } catch (error) {
+      debugPrint('재생 중지 실패: $error');
+    }
+  }
+
+  Future<void> _export(Recording recording) async {
+    try {
+      final saved = await widget.exporter.export(
+        recording.path,
+        recording.path.split('/').last,
       );
+      _showNotice(saved ? '녹음 파일을 저장했어요.' : '저장을 취소했어요.');
+    } catch (error) {
+      _showNotice('녹음 파일을 내보내지 못했어요.');
+      debugPrint('내보내기 실패: $error');
+    }
+  }
+
+  Future<void> _startRecording() async {
+    await _stopPlayback();
+    setState(() => _busy = true);
+    try {
+      if (!await widget.recorder.requestPermission()) {
+        _showNotice('마이크 권한이 없어 녹음할 수 없어요. 설정에서 권한을 허용해 주세요.');
+        return;
+      }
+      await widget.recorder.start(
+        await widget.recordingStore.newRecordingPath(),
+      );
+      _elapsedSeconds = 0;
+      _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() => _elapsedSeconds++);
+      });
+      if (mounted) setState(() => _recording = true);
+    } catch (error) {
+      _showNotice('녹음을 시작하지 못했어요.');
+      debugPrint('녹음 시작 실패: $error');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _stopRecording() async {
+    _ticker?.cancel();
+    _ticker = null;
+    setState(() => _busy = true);
+    try {
+      await widget.recorder.stop();
+      _showNotice('녹음을 보관함에 저장했어요.');
+    } catch (error) {
+      _showNotice('녹음이 너무 짧아 저장하지 못했어요.');
+      debugPrint('녹음 중지 실패: $error');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _recording = false;
+          _busy = false;
+        });
+      }
+    }
+    await _loadRecordings();
+  }
+
+  String _clock(int seconds) =>
+      '${(seconds ~/ 60).toString().padLeft(2, '0')}:'
+      '${(seconds % 60).toString().padLeft(2, '0')}';
+
+  String _recordingTitle(DateTime time) {
+    final period = time.hour < 12 ? '오전' : '오후';
+    final hour = time.hour % 12 == 0 ? 12 : time.hour % 12;
+    return '$period ${hour.toString().padLeft(2, '0')}:'
+        '${time.minute.toString().padLeft(2, '0')} 녹음';
+  }
+
+  String _recordingDetail(Recording recording) {
+    final kb = (recording.sizeBytes / 1024).ceil();
+    final status = _playingPath == recording.path ? _playback : null;
+    if (status == null) return '${kb}KB';
+    return '${_clock(status.position.inSeconds)} / '
+        '${_clock(status.duration.inSeconds)} · ${kb}KB';
+  }
+
+  double _progressOf(Recording recording) {
+    final status = _playingPath == recording.path ? _playback : null;
+    if (status == null || status.duration.inMilliseconds == 0) return 0;
+    return (status.position.inMilliseconds / status.duration.inMilliseconds)
+        .clamp(0, 1)
+        .toDouble();
+  }
+
+  /// 녹음을 논리적 날짜별로 묶는다. 날짜와 녹음 모두 최신순이다.
+  Map<DateTime, List<Recording>> _groupByLogicalDate() {
+    final dates = LogicalDateService(dayTurnoverHour: widget.turnoverHour);
+    final sorted = [..._recordings]
+      ..sort((a, b) => b.recordedAt.compareTo(a.recordedAt));
+    final groups = <DateTime, List<Recording>>{};
+    for (final recording in sorted) {
+      final date = dates.logicalDateOf(recording.recordedAt);
+      groups.putIfAbsent(date, () => []).add(recording);
+    }
+    return groups;
+  }
+
+  String _groupLabel(DateTime date) =>
+      LogicalDateService.isSameDate(date, widget.logicalToday)
+      ? '오늘 · ${koreanDate(date)}'
+      : koreanDate(date);
 
   @override
   Widget build(BuildContext context) => ListView(
@@ -97,15 +313,15 @@ class _RecordTabState extends State<RecordTab> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  _recordingPreview ? '녹음 화면 미리보기 중' : '녹음할 준비가 되었어요',
+                  _recording ? '녹음 중' : '녹음할 준비가 되었어요',
                   style: const TextStyle(
                     color: Color(0xFFC8E1D4),
                     fontSize: 13,
                   ),
                 ),
-                const Text(
-                  '00:00',
-                  style: TextStyle(
+                Text(
+                  _clock(_elapsedSeconds),
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 20,
                     fontWeight: FontWeight.w800,
@@ -118,9 +334,7 @@ class _RecordTabState extends State<RecordTab> {
               children: [
                 Expanded(
                   child: FilledButton.icon(
-                    onPressed: _recordingPreview
-                        ? null
-                        : () => setState(() => _recordingPreview = true),
+                    onPressed: _recording || _busy ? null : _startRecording,
                     style: FilledButton.styleFrom(
                       backgroundColor: AppColors.mint,
                       foregroundColor: AppColors.forest,
@@ -133,9 +347,7 @@ class _RecordTabState extends State<RecordTab> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: _recordingPreview
-                        ? () => setState(() => _recordingPreview = false)
-                        : null,
+                    onPressed: _recording && !_busy ? _stopRecording : null,
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.white,
                       disabledForegroundColor: const Color(0x88FFFFFF),
@@ -153,7 +365,7 @@ class _RecordTabState extends State<RecordTab> {
             ),
             const SizedBox(height: 14),
             const Text(
-              '화면 미리보기입니다. 실제 오디오는 녹음되지 않아요.',
+              '녹음은 앱 저장소에 보관 기간 동안 보관돼요.',
               style: TextStyle(color: Color(0xFFBAD0C4), fontSize: 12),
             ),
           ],
@@ -172,9 +384,12 @@ class _RecordTabState extends State<RecordTab> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('오늘의 보관함', style: Theme.of(context).textTheme.labelSmall),
+              Text('녹음 보관함', style: Theme.of(context).textTheme.labelSmall),
               const SizedBox(height: 5),
-              Text('저장된 녹음 2', style: Theme.of(context).textTheme.titleLarge),
+              Text(
+                '저장된 녹음 ${_recordings.length}',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
             ],
           ),
           Text(
@@ -184,19 +399,32 @@ class _RecordTabState extends State<RecordTab> {
         ],
       ),
       const SizedBox(height: 16),
-      _AudioPreviewCard(
-        title: '아침의 메모',
-        time: '오전 09:42 · 00:38',
-        onPlay: () => _showMockNotice('예시 오디오입니다. 재생 기능은 아직 연결되지 않았어요.'),
-        onExport: () => _showMockNotice('예시 오디오입니다. 내보내기 기능은 아직 연결되지 않았어요.'),
-      ),
-      const SizedBox(height: 10),
-      _AudioPreviewCard(
-        title: '퇴근길 생각',
-        time: '오후 06:15 · 01:12',
-        onPlay: () => _showMockNotice('예시 오디오입니다. 재생 기능은 아직 연결되지 않았어요.'),
-        onExport: () => _showMockNotice('예시 오디오입니다. 내보내기 기능은 아직 연결되지 않았어요.'),
-      ),
+      if (_recordings.isEmpty)
+        const Text('아직 저장된 녹음이 없어요.', style: TextStyle(color: AppColors.muted)),
+      for (final group in _groupByLogicalDate().entries) ...[
+        Padding(
+          padding: const EdgeInsets.only(top: 6, bottom: 8),
+          child: Text(
+            _groupLabel(group.key),
+            style: const TextStyle(
+              color: AppColors.green,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        for (final recording in group.value) ...[
+          _AudioPreviewCard(
+            title: _recordingTitle(recording.recordedAt),
+            time: _recordingDetail(recording),
+            playing: _playingPath == recording.path,
+            progress: _progressOf(recording),
+            onPlay: _recording ? null : () => _togglePlayback(recording),
+            onExport: () => _export(recording),
+          ),
+          const SizedBox(height: 10),
+        ],
+      ],
     ],
   );
 }
@@ -257,13 +485,19 @@ class _AudioPreviewCard extends StatelessWidget {
   const _AudioPreviewCard({
     required this.title,
     required this.time,
+    required this.playing,
+    required this.progress,
     required this.onPlay,
     required this.onExport,
   });
 
   final String title;
   final String time;
-  final VoidCallback onPlay;
+  final bool playing;
+  final double progress;
+
+  /// 녹음 중에는 null이라 재생 버튼이 비활성화된다.
+  final VoidCallback? onPlay;
   final VoidCallback onExport;
 
   @override
@@ -278,8 +512,8 @@ class _AudioPreviewCard extends StatelessWidget {
       children: [
         IconButton.filledTonal(
           onPressed: onPlay,
-          tooltip: '$title 재생',
-          icon: const Icon(Icons.play_arrow_rounded),
+          tooltip: playing ? '$title 정지' : '$title 재생',
+          icon: Icon(playing ? Icons.stop_rounded : Icons.play_arrow_rounded),
         ),
         const SizedBox(width: 10),
         Expanded(
@@ -301,8 +535,8 @@ class _AudioPreviewCard extends StatelessWidget {
               const SizedBox(height: 7),
               ClipRRect(
                 borderRadius: BorderRadius.circular(3),
-                child: const LinearProgressIndicator(
-                  value: 0,
+                child: LinearProgressIndicator(
+                  value: progress,
                   minHeight: 3,
                   backgroundColor: AppColors.border,
                   color: AppColors.green,

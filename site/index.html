@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>오늘 하루 — 목소리로 남기는 하루 기록</title>
+  <meta name="description" content="목소리로 하루를 녹음하고, 일기로 정리해 캘린더에서 돌아보는 Android 앱. 회원가입·서버 없이 기기 안에만 저장합니다.">
+  <style>
+    /* 앱 테마(lib/core/theme/app_theme.dart)와 같은 색상 */
+    :root {
+      --forest: #173E35;
+      --background: #F6F7F2;
+      --mint: #BDEAAC;
+      --ink: #182F2B;
+      --green: #4B9567;
+      --soft-green: #EEF5E9;
+      --muted: #66746D;
+      --border: #E1E8DF;
+      --surface: #FFFFFF;
+      --radius: 24px;
+      --max: 1080px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    [id] { scroll-margin-top: 76px; }
+    body {
+      margin: 0;
+      background: var(--background);
+      color: var(--ink);
+      /* 외부 폰트 서버를 쓰지 않고 기기 기본 글꼴을 사용 */
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", "Segoe UI", Roboto, sans-serif;
+      line-height: 1.6;
+      word-break: keep-all;
+      overflow-wrap: break-word;
+    }
+    a { color: inherit; }
+    img { max-width: 100%; height: auto; display: block; }
+    .wrap { width: 100%; max-width: var(--max); margin: 0 auto; padding: 0 16px; }
+
+    /* 상단 바 */
+    header {
+      position: sticky; top: 0; z-index: 10;
+      background: rgba(246, 247, 242, 0.92);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border);
+    }
+    header .wrap { display: flex; align-items: center; justify-content: space-between; height: 60px; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.15rem; text-decoration: none; }
+    .brand-mark {
+      width: 32px; height: 32px; border-radius: 10px; background: var(--forest);
+      display: grid; place-items: center;
+    }
+    .brand-mark span { display: flex; gap: 2px; align-items: center; height: 14px; }
+    .brand-mark i { width: 3px; background: var(--mint); border-radius: 2px; }
+    .header-link {
+      font-size: 0.95rem; font-weight: 700; text-decoration: none;
+      padding: 8px 16px; border-radius: 999px; background: var(--forest); color: #fff;
+    }
+
+    /* 첫 화면 */
+    .hero { padding: 56px 0 64px; }
+    .hero .wrap { display: grid; gap: 40px; align-items: center; grid-template-columns: 1.1fr 0.9fr; }
+    .eyebrow { color: var(--green); font-weight: 800; font-size: 0.95rem; letter-spacing: 0.02em; margin: 0 0 12px; }
+    h1 { font-size: clamp(2.2rem, 6vw, 3.6rem); line-height: 1.2; margin: 0 0 20px; letter-spacing: -0.02em; }
+    .lead { font-size: 1.1rem; color: var(--muted); margin: 0 0 32px; max-width: 32em; }
+    .actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 10px; text-decoration: none;
+      font-weight: 800; font-size: 1.05rem; padding: 16px 26px; border-radius: 18px;
+    }
+    .btn-primary { background: var(--forest); color: #fff; }
+    .btn-primary:hover { background: #0f2c25; }
+    .btn-ghost { border: 1.5px solid var(--forest); color: var(--forest); }
+    .btn-disabled { background: #dfe8e3; color: #5f7068; cursor: not-allowed; }
+    .btn svg { width: 22px; height: 22px; }
+    .note { color: var(--muted); font-size: 0.9rem; margin: 16px 0 0; }
+    .phone {
+      justify-self: center; width: 300px; max-width: 100%;
+      border-radius: 36px; padding: 10px; background: var(--forest);
+      box-shadow: 0 24px 60px rgba(23, 62, 53, 0.25);
+    }
+    .phone img { border-radius: 28px; }
+
+    /* 섹션 공통 */
+    section { padding: 72px 0; }
+    .section-title { font-size: clamp(1.6rem, 4vw, 2.2rem); line-height: 1.3; margin: 0 0 12px; letter-spacing: -0.01em; }
+    .section-lead { color: var(--muted); margin: 0 0 40px; max-width: 40em; }
+
+    /* 기능 */
+    .features { display: grid; gap: 16px; grid-template-columns: repeat(3, 1fr); }
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 28px;
+    }
+    .card h3 { margin: 14px 0 8px; font-size: 1.15rem; }
+    .card p { margin: 0; color: var(--muted); font-size: 0.97rem; }
+    .icon {
+      width: 44px; height: 44px; border-radius: 14px; background: var(--soft-green);
+      display: grid; place-items: center; color: var(--green);
+    }
+    .icon svg { width: 24px; height: 24px; }
+
+    /* 화면 미리보기 */
+    .screens-section { background: var(--forest); color: #fff; }
+    .screens-section .section-lead { color: #c9d8d1; }
+    .screens { display: grid; gap: 20px; grid-template-columns: repeat(4, 1fr); }
+    .screens figure { margin: 0; }
+    .screens img { border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.12); }
+    .screens figcaption { margin-top: 12px; font-size: 0.95rem; color: #c9d8d1; }
+    .screens figcaption strong { display: block; color: var(--mint); }
+
+    /* 설치 방법 */
+    .steps { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; counter-reset: step; }
+    .steps li {
+      counter-increment: step; position: relative;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 18px;
+      padding: 20px 20px 20px 72px;
+    }
+    .steps li::before {
+      content: counter(step); position: absolute; left: 20px; top: 18px;
+      width: 36px; height: 36px; border-radius: 50%; background: var(--mint); color: var(--forest);
+      font-weight: 800; display: grid; place-items: center;
+    }
+    .steps strong { display: block; margin-bottom: 2px; }
+    .steps span { color: var(--muted); font-size: 0.95rem; }
+
+    /* 현재 상태 */
+    .status { display: grid; gap: 16px; grid-template-columns: 1fr 1fr; }
+    .status ul { margin: 12px 0 0; padding-left: 20px; color: var(--muted); }
+    .status li { margin-bottom: 6px; }
+    .status .card.limit { background: var(--soft-green); }
+
+    /* 개인정보 */
+    .privacy {
+      display: flex; gap: 20px; align-items: flex-start;
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 32px;
+    }
+    .privacy h2 { margin: 0 0 8px; font-size: 1.4rem; }
+    .privacy p { margin: 0; color: var(--muted); }
+
+    footer { border-top: 1px solid var(--border); padding: 32px 0 48px; color: var(--muted); font-size: 0.9rem; }
+    footer .wrap { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; }
+
+    @media (max-width: 860px) {
+      .hero { padding: 36px 0 48px; }
+      .hero .wrap { grid-template-columns: 1fr; }
+      .features { grid-template-columns: 1fr; }
+      .screens { grid-template-columns: repeat(2, 1fr); }
+      .status { grid-template-columns: 1fr; }
+      section { padding: 56px 0; }
+    }
+    @media (max-width: 420px) {
+      .btn { width: 100%; justify-content: center; }
+      .privacy { flex-direction: column; padding: 24px; }
+      .card { padding: 22px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <a class="brand" href="#">
+        <span class="brand-mark" aria-hidden="true"><span><i style="height:6px"></i><i style="height:14px"></i><i style="height:9px"></i><i style="height:12px"></i></span></span>
+        오늘 하루
+      </a>
+      <a class="header-link" href="#install">설치 안내</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="wrap">
+        <div>
+          <p class="eyebrow">Android 음성 일기 앱</p>
+          <h1>말로 남기는<br>오늘의 기록.</h1>
+          <p class="lead">바쁜 하루도 잠깐의 목소리로 남겨 보세요. 녹음은 하루 단위로 묶이고, 일기는 캘린더에서 날짜별로 다시 볼 수 있어요.</p>
+          <div class="actions" id="download">
+            <span class="btn btn-disabled" role="link" aria-disabled="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+              APK 준비 중
+            </span>
+            <a class="btn btn-ghost" href="#install">설치 방법</a>
+          </div>
+          <p class="note">Android 전용 · 회원가입 없음 · 기기 안에만 저장</p>
+        </div>
+        <div class="phone">
+          <img src="images/recording-in-progress.png" width="1080" height="2400" alt="녹음 중인 오늘 하루 앱 화면. 파형과 경과 시간, 녹음 중지 버튼, 녹음 보관함이 보인다.">
+        </div>
+      </div>
+    </section>
+
+    <section id="features">
+      <div class="wrap">
+        <h2 class="section-title">하루를 남기고, 묶고, 돌아보기</h2>
+        <p class="section-lead">지금 앱에서 실제로 동작하는 기능입니다.</p>
+        <div class="features">
+          <article class="card">
+            <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg></div>
+            <h3>녹음하고 다시 듣기</h3>
+            <p>마이크 권한을 허용하고 녹음 시작·중지만 누르면 녹음이 보관함에 쌓여요. 보관함에서 바로 재생하거나, 파일 앱의 다운로드 폴더로 내보낼 수 있어요.</p>
+          </article>
+          <article class="card">
+            <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></div>
+            <h3>하루 전환 시각</h3>
+            <p>밤 9시부터 다음 날 아침 9시 사이에서 하루가 넘어가는 시각을 정해요. 자정이 지난 새벽 녹음도 보관함에서 어제 하루로 묶여요.</p>
+          </article>
+          <article class="card">
+            <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+            <h3>오디오 보관 기간</h3>
+            <p>녹음을 1~14일(기본 1일) 동안 보관해요. 기간이 지난 녹음은 앱을 실행할 때 자동으로 삭제돼요.</p>
+          </article>
+          <article class="card">
+            <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M8 13h8M8 17h5"/></svg></div>
+            <h3>오늘의 일기 만들기</h3>
+            <p>오늘 녹음이 있으면 일기 초안을 만들어 저장해요. 지금 초안은 녹음 내용이 아닌 예시 문장으로 채워져요.</p>
+          </article>
+          <article class="card">
+            <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
+            <h3>당일 수정 잠금</h3>
+            <p>일기는 그 논리적 날짜 안에서만 고칠 수 있어요. 하루가 지나면 읽기 전용으로 잠겨 그대로 보존돼요.</p>
+          </article>
+          <article class="card">
+            <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><circle cx="12" cy="15.5" r="1.2" fill="currentColor"/></svg></div>
+            <h3>캘린더로 돌아보기</h3>
+            <p>일기가 저장된 날짜에만 점이 찍혀요. 날짜를 누르면 그날의 일기를 바로 볼 수 있어요.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="screens-section" id="screens">
+      <div class="wrap">
+        <h2 class="section-title">화면 미리보기</h2>
+        <p class="section-lead">Android 에뮬레이터에서 캡처한 앱 화면입니다. 일기 내용은 예시 문장이에요.</p>
+        <div class="screens">
+          <figure>
+            <img src="images/record.png" width="1080" height="2400" loading="lazy" alt="녹음 탭. 오늘과 9월 30일로 묶인 녹음 보관함. 녹음마다 재생과 내보내기 버튼이 있다.">
+            <figcaption><strong>녹음 보관함</strong>날짜별로 묶어 재생·내보내기</figcaption>
+          </figure>
+          <figure>
+            <img src="images/calendar.png" width="1080" height="2400" loading="lazy" alt="캘린더 탭. 월 달력과 선택한 날짜의 일기.">
+            <figcaption><strong>캘린더</strong>일기가 있는 날에 마커</figcaption>
+          </figure>
+          <figure>
+            <img src="images/settings.png" width="1080" height="2400" loading="lazy" alt="설정 화면. 하루 전환 시각과 오디오 보관 기간 선택.">
+            <figcaption><strong>설정</strong>전환 시각·보관 기간</figcaption>
+          </figure>
+          <figure>
+            <img src="images/calendar-past.png" width="1080" height="2400" loading="lazy" alt="과거 날짜의 일기가 읽기 전용으로 표시된 화면.">
+            <figcaption><strong>지난 일기</strong>읽기 전용으로 보존</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section id="install">
+      <div class="wrap">
+        <h2 class="section-title">설치 방법</h2>
+        <p class="section-lead">Play 스토어를 거치지 않고 APK 파일로 직접 설치해요. APK 파일은 아직 준비 중이라, 공개되면 아래 순서로 설치할 수 있어요.</p>
+        <ol class="steps">
+          <li><strong>Android 휴대폰에서 이 페이지를 열고 [APK 다운로드]를 눌러요.</strong><span>APK가 공개되면 이 버튼이 활성화돼요.</span></li>
+          <li><strong>다운로드한 파일을 열어요.</strong><span>"출처를 알 수 없는 앱" 경고가 뜨면, 안내에 따라 사용 중인 브라우저(또는 파일 앱)의 설치 허용을 켜 주세요.</span></li>
+          <li><strong>[설치]를 누르고 앱을 실행해요.</strong><span>휴대폰 앱 목록에 "오늘 하루"로 표시돼요.</span></li>
+          <li><strong>처음 녹음할 때 마이크 권한을 허용해요.</strong><span>권한을 거부하면 녹음할 수 없어요. 나중에 휴대폰 설정 &gt; 앱에서 다시 허용할 수 있어요.</span></li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="status">
+      <div class="wrap">
+        <h2 class="section-title">현재 버전 안내</h2>
+        <p class="section-lead">개발 중인 앱이라 아직 연결되지 않은 기능이 있어요.</p>
+        <div class="status">
+          <div class="card">
+            <h3>지금 되는 것</h3>
+            <ul>
+              <li>마이크 권한 요청과 녹음, 앱 저장소 보관</li>
+              <li>녹음 재생, 다운로드 폴더로 내보내기</li>
+              <li>하루 전환 시각 기준으로 녹음·일기 날짜 묶기</li>
+              <li>보관 기간이 지난 녹음 자동 삭제</li>
+              <li>설정·일기 저장(앱을 다시 실행해도 유지)</li>
+              <li>당일 일기 수정, 지난 일기 읽기 전용</li>
+              <li>캘린더 마커와 날짜별 일기 보기</li>
+            </ul>
+          </div>
+          <div class="card limit">
+            <h3>아직 안 되는 것</h3>
+            <ul>
+              <li>APK 배포(준비 중)</li>
+              <li>메신저 등 다른 앱으로 녹음 공유</li>
+              <li>녹음 내용을 받아 적어 일기로 만들기(지금은 예시 문장)</li>
+              <li>iPhone(iOS) 지원</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="privacy" style="padding-top:0">
+      <div class="wrap">
+        <div class="privacy">
+          <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg></div>
+          <div>
+            <h2>내 기록은 내 휴대폰에만</h2>
+            <p>회원가입도, 로그인도, 서버도 없어요. 녹음과 일기, 설정은 모두 휴대폰의 앱 저장소에만 저장되고, 앱은 마이크 외에 인터넷 권한을 요청하지 않아요. 앱을 삭제하면 저장된 기록도 함께 지워져요.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <span>오늘 하루 · Flutter로 만든 Android 앱</span>
+      <a href="https://github.com/siren8170/codex-project">GitHub 저장소</a>
+    </div>
+  </footer>
+</body>
+</html>
